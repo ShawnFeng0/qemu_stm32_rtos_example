@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+if [ $# -lt 1 ] ; then
+echo "USAGE:"
+echo "$0 image_file_path"
+exit 1;
+fi
+
+image_file_path=$1
+shift
+
 # The command line used by the QEMU Eclipse plug-in to start a debug session looks like this:
 #
 #$ qemu-system-gnuarmeclipse --verbose --verbose --board STM32F4-Discovery \
@@ -17,5 +26,6 @@
 
 qemu-system-gnuarmeclipse --verbose --verbose --board STM32F4-Discovery \
 --mcu STM32F407VG -d unimp,guest_errors \
---image cmake-build-debug/qemu_stm32.elf \
---semihosting-config enable=on,target=native
+--image $image_file_path \
+--semihosting-config enable=on,target=native \
+"$@"
