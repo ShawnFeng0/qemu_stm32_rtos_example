@@ -2,9 +2,14 @@
 #include "stm32f4xx_hal.h"
 
 #include <stdint.h>
+#include <stdio.h>
 
-void SystemClock_Config(void);
-static void Error_Handler(void);
+#define LOGGER_DEBUG(fmt, ...)                                                 \
+  ({                                                                           \
+    char buffer[256];                                                          \
+    snprintf(buffer, sizeof(buffer), fmt, ##__VA_ARGS__);                      \
+    PrintDebugStr(buffer);                                                     \
+  })
 
 static void PrintDebugStr(const char *str) {
   if (!str)
@@ -14,6 +19,57 @@ static void PrintDebugStr(const char *str) {
     ITM_SendChar(*str++);
   }
 }
+
+void SystemClock_Config(void);
+static void Error_Handler(void);
+
+typedef void *(*task_entry_t)(void *);
+
+uint32_t *task_stack_init(task_entry_t task_entry, void *parameters,
+                          uint32_t *top_of_stack) {
+  uint32_t *stack_top = top_of_stack - 16;
+
+  *(stack_top + 15) = (uint32_t)0x01000000;    // xPSR register
+  *(stack_top + 14) = (uint32_t)task_entry;    // PC register
+  *(stack_top + 13) = (uint32_t)Error_Handler; // LR register
+                                               // R12 R3 R2 R1
+  *(stack_top + 8) = (uint32_t)parameters;     // R0
+
+  return stack_top;
+}
+
+void task_init(uint32_t *task, task_entry_t task_entry, void *parameters,
+               uint32_t *stack, uint32_t stack_size) {
+  *task = (uint32_t)task_stack_init(task_entry, parameters, stack + stack_size);
+}
+
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+uint32_t task0_stack[2048];
+uint32_t task1_stack[2048];
+uint32_t task2_stack[2048];
+uint32_t task3_stack[2048];
+
+uint32_t curr_task = 0;
+uint32_t next_task = 1;
+uint32_t PSP_array[4];
+
+#define DEFINE_TOGGLE_TASK(name, interval_ms, led)                             \
+  void *name(void *param) {                                                    \
+    LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param);                     \
+    while (1) {                                                                \
+      if (HAL_GetTick() & (interval_ms)) {                                     \
+        BSP_LED_On(led);                                                       \
+      } else {                                                                 \
+        BSP_LED_Off(led);                                                      \
+      }                                                                        \
+    }                                                                          \
+  }
+
+DEFINE_TOGGLE_TASK(task0, 512, LED3)
+DEFINE_TOGGLE_TASK(task1, 1024, LED4)
+DEFINE_TOGGLE_TASK(task2, 2048, LED5)
+DEFINE_TOGGLE_TASK(task3, 4096, LED6)
 
 int main(void) {
   /* STM32F4xx HAL library initialization:
@@ -36,20 +92,76 @@ int main(void) {
   /* Configure KEY Button */
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_GPIO);
 
-  /* Wait for USER Button press before starting the Communication */
-  while (BSP_PB_GetState(BUTTON_KEY) == RESET) {
-    /* Toggle LED3 waiting for user to press button */
-    PrintDebugStr("Hello qemu!\r\n");
-    BSP_LED_Toggle(LED3);
-    BSP_LED_Toggle(LED4);
-    BSP_LED_Toggle(LED5);
-    BSP_LED_Toggle(LED6);
-    HAL_Delay(500);
-  }
+  task_init(&PSP_array[0], task0, (void *)10, task0_stack,
+            ARRAY_SIZE(task0_stack));
+  task_init(&PSP_array[1], task1, (void *)11, task1_stack,
+            ARRAY_SIZE(task1_stack));
+  task_init(&PSP_array[2], task2, (void *)12, task2_stack,
+            ARRAY_SIZE(task2_stack));
+  task_init(&PSP_array[3], task3, (void *)13, task3_stack,
+            ARRAY_SIZE(task3_stack));
+
+  curr_task = 0;
+
+  __set_PSP(PSP_array[curr_task] + 16 * 4);
+  NVIC_SetPriority(PendSV_IRQn, 0xff);
+  __set_CONTROL(0x3);
+  __ISB();
+
+  task0(NULL);
+
+  //  /* Wait for USER Button press before starting the Communication */
+  //  while (BSP_PB_GetState(BUTTON_KEY) == RESET) {
+  //    /* Toggle LED3 waiting for user to press button */
+  //    LOGGER_DEBUG("Hello qemu!\r\n");
+  //    HAL_Delay(500);
+  //  }
 
   /* Infinite loop */
   while (1) {
   }
+}
+
+#define ASM(...) __asm volatile(#__VA_ARGS__)
+
+/**
+ * @brief This function handles Pendable request for system service.
+ */
+// void PendSV_Handler(void) __attribute__((naked));
+void PendSV_Handler(void) {
+  // Save current context
+  ASM(mrs r0, psp);            // get stack pointer
+  ASM(stmdb r0 !, {r4 - r11}); // push to stack
+  ASM(ldr r1, curr_task_);
+  ASM(ldr r2, [r1]);
+  ASM(ldr r3, psp_array_);
+  ASM(str r0, [ r3, r2, lsl #2 ]); // store r0 to r3[r2 * 4]
+
+  // Load next context
+  ASM(ldr r4, next_task_);
+  ASM(ldr r4, [r4]);
+  ASM(str r4, [r1]);
+  ASM(ldr r0, [ r3, r4, lsl #2 ]);
+  ASM(ldmia r0 !, {r4 - r11});
+  ASM(msr psp, r0);
+  ASM(bx lr);
+
+  // Define C data
+  ASM(.align 4);
+  ASM(curr_task_ :.word curr_task);
+  ASM(next_task_ :.word next_task);
+  ASM(psp_array_ :.word PSP_array);
+}
+
+/**
+ * @brief This function handles System tick timer.
+ */
+void SysTick_Handler(void) {
+  HAL_IncTick();
+
+  next_task = (curr_task + 1) % 4;
+
+  SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk; // Trigger PendSV interrupt
 }
 
 /**
