@@ -71,6 +71,8 @@ DEFINE_TOGGLE_TASK(task1, 1024, LED4)
 DEFINE_TOGGLE_TASK(task2, 2048, LED5)
 DEFINE_TOGGLE_TASK(task3, 4096, LED6)
 
+void StartScheduler();
+
 int main(void) {
   /* STM32F4xx HAL library initialization:
        - Configure the Flash prefetch, instruction and Data caches
@@ -101,21 +103,7 @@ int main(void) {
   task_init(&PSP_array[3], task3, (void *)13, task3_stack,
             ARRAY_SIZE(task3_stack));
 
-  curr_task = 0;
-
-  __set_PSP(PSP_array[curr_task] + 16 * 4);
-  NVIC_SetPriority(PendSV_IRQn, 0xff);
-  __set_CONTROL(0x3);
-  __ISB();
-
-  task0(NULL);
-
-  //  /* Wait for USER Button press before starting the Communication */
-  //  while (BSP_PB_GetState(BUTTON_KEY) == RESET) {
-  //    /* Toggle LED3 waiting for user to press button */
-  //    LOGGER_DEBUG("Hello qemu!\r\n");
-  //    HAL_Delay(500);
-  //  }
+  StartScheduler();
 
   /* Infinite loop */
   while (1) {
@@ -124,10 +112,67 @@ int main(void) {
 
 #define ASM(...) __asm volatile(#__VA_ARGS__)
 
+static void StartFirstTask(void) __attribute__((naked));
+static void StartFirstTask(void) {
+  /* Use the NVIC offset register to locate the stack. */
+  ASM(ldr r0, = 0xE000ED08);
+  ASM(ldr r0, [r0]);
+  ASM(ldr r0, [r0]);
+
+  /* Set the msp back to the start of the stack. */
+  ASM(msr msp, r0);
+
+  /* Clear the bit that indicates the FPU is in use */
+  ASM(mov r0, #0);
+  ASM(msr control, r0);
+
+  /* Globally enable interrupts. */
+  ASM(cpsie i);
+  ASM(cpsie f);
+  ASM(dsb);
+  ASM(isb);
+
+  /* System call to start first task. */
+  ASM(svc 0);
+  ASM(nop);
+}
+
+void StartScheduler() {
+  curr_task = 0;
+  NVIC_SetPriority(PendSV_IRQn, 0xff);
+//  __set_CONTROL(0x3);
+//  __ISB();
+  StartFirstTask();
+}
+
+/**
+ * @brief This function handles System service call via SWI instruction.
+ */
+void SVC_Handler(void) __attribute__((naked));
+void SVC_Handler(void) {
+  ASM(ldr r1, curr_task_svc);
+  ASM(ldr r3, psp_array_svc);
+
+  // Load next context
+  ASM(ldr r4, next_task_svc);
+  ASM(ldr r4, [r4]);
+  ASM(str r4, [r1]);
+  ASM(ldr r0, [ r3, r4, lsl #2 ]);
+  ASM(ldmia r0 !, {r4 - r11});
+  ASM(msr psp, r0);
+  ASM(bx lr);
+
+  // Define C data
+  ASM(.align 4);
+  ASM(curr_task_svc :.word curr_task);
+  ASM(next_task_svc :.word next_task);
+  ASM(psp_array_svc :.word PSP_array);
+}
+
 /**
  * @brief This function handles Pendable request for system service.
  */
-// void PendSV_Handler(void) __attribute__((naked));
+void PendSV_Handler(void) __attribute__((naked));
 void PendSV_Handler(void) {
   // Save current context
   ASM(mrs r0, psp);            // get stack pointer
