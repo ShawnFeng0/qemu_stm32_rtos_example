@@ -140,8 +140,8 @@ static void StartFirstTask(void) {
 void StartScheduler() {
   curr_task = 0;
   NVIC_SetPriority(PendSV_IRQn, 0xff);
-//  __set_CONTROL(0x3);
-//  __ISB();
+  //  __set_CONTROL(0x3);
+  //  __ISB();
   StartFirstTask();
 }
 
@@ -160,6 +160,10 @@ void SVC_Handler(void) {
   ASM(ldr r0, [ r3, r4, lsl #2 ]);
   ASM(ldmia r0 !, {r4 - r11});
   ASM(msr psp, r0);
+
+  // Set exc_return value, then the process stack (PSP) will be used when bx
+  // returns
+  ASM(ldr lr, exc_return_init);
   ASM(bx lr);
 
   // Define C data
@@ -167,6 +171,7 @@ void SVC_Handler(void) {
   ASM(curr_task_svc :.word curr_task);
   ASM(next_task_svc :.word next_task);
   ASM(psp_array_svc :.word PSP_array);
+  ASM(exc_return_init :.word 0xfffffffd);
 }
 
 /**
