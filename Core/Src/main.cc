@@ -11,6 +11,12 @@
     PrintDebugStr(buffer);                                                     \
   })
 
+#ifdef __cplusplus
+#define UTOS_EXPORT extern "C"
+#else
+#define UTOS_EXPORT
+#endif
+
 static void PrintDebugStr(const char *str) {
   if (!str)
     return;
@@ -148,7 +154,7 @@ void StartScheduler() {
 /**
  * @brief This function handles System service call via SWI instruction.
  */
-void SVC_Handler(void) __attribute__((naked));
+UTOS_EXPORT void SVC_Handler(void) __attribute__((naked));
 void SVC_Handler(void) {
   ASM(ldr r1, curr_task_svc);
   ASM(ldr r3, psp_array_svc);
@@ -177,7 +183,7 @@ void SVC_Handler(void) {
 /**
  * @brief This function handles Pendable request for system service.
  */
-void PendSV_Handler(void) __attribute__((naked));
+UTOS_EXPORT void PendSV_Handler(void) __attribute__((naked));
 void PendSV_Handler(void) {
   // Save current context
   ASM(mrs r0, psp);            // get stack pointer
@@ -206,7 +212,7 @@ void PendSV_Handler(void) {
 /**
  * @brief This function handles System tick timer.
  */
-void SysTick_Handler(void) {
+UTOS_EXPORT void SysTick_Handler(void) {
   HAL_IncTick();
 
   next_task = (curr_task + 1) % 4;
