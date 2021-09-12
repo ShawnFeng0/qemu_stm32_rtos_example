@@ -17,6 +17,26 @@
 #define UTOS_EXPORT
 #endif
 
+#define UTOS_ASM(...) __asm volatile(#__VA_ARGS__)
+
+/**
+  \brief   Enable IRQ Interrupts
+  \details Enables IRQ interrupts by clearing the I-bit in the CPSR.
+           Can only be executed in Privileged modes.
+ */
+static inline void utos_enable_irq() {
+  __ASM volatile("cpsie i" : : : "memory");
+}
+
+/**
+  \brief   Disable IRQ Interrupts
+  \details Disables IRQ interrupts by setting the I-bit in the CPSR.
+           Can only be executed in Privileged modes.
+ */
+static inline void utos_disable_irq() {
+  __ASM volatile("cpsid i" : : : "memory");
+}
+
 static void PrintDebugStr(const char *str) {
   if (!str)
     return;
@@ -96,6 +116,7 @@ int main(void) {
   BSP_LED_Init(LED4);
   BSP_LED_Init(LED5);
   BSP_LED_Init(LED6);
+  __enable_irq();
 
   /* Configure KEY Button */
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_GPIO);
@@ -116,31 +137,29 @@ int main(void) {
   }
 }
 
-#define ASM(...) __asm volatile(#__VA_ARGS__)
-
 static void StartFirstTask(void) __attribute__((naked));
 static void StartFirstTask(void) {
   /* Use the NVIC offset register to locate the stack. */
-  ASM(ldr r0, = 0xE000ED08);
-  ASM(ldr r0, [r0]);
-  ASM(ldr r0, [r0]);
+  UTOS_ASM(ldr r0, = 0xE000ED08);
+  UTOS_ASM(ldr r0, [r0]);
+  UTOS_ASM(ldr r0, [r0]);
 
   /* Set the msp back to the start of the stack. */
-  ASM(msr msp, r0);
+  UTOS_ASM(msr msp, r0);
 
   /* Clear the bit that indicates the FPU is in use */
-  ASM(mov r0, #0);
-  ASM(msr control, r0);
+  UTOS_ASM(mov r0, #0);
+  UTOS_ASM(msr control, r0);
 
   /* Globally enable interrupts. */
-  ASM(cpsie i);
-  ASM(cpsie f);
-  ASM(dsb);
-  ASM(isb);
+  UTOS_ASM(cpsie i);
+  UTOS_ASM(cpsie f);
+  UTOS_ASM(dsb);
+  UTOS_ASM(isb);
 
   /* System call to start first task. */
-  ASM(svc 0);
-  ASM(nop);
+  UTOS_ASM(svc 0);
+  UTOS_ASM(nop);
 }
 
 void StartScheduler() {
@@ -156,28 +175,28 @@ void StartScheduler() {
  */
 UTOS_EXPORT void SVC_Handler(void) __attribute__((naked));
 void SVC_Handler(void) {
-  ASM(ldr r1, curr_task_svc);
-  ASM(ldr r3, psp_array_svc);
+  UTOS_ASM(ldr r1, curr_task_svc);
+  UTOS_ASM(ldr r3, psp_array_svc);
 
   // Load next context
-  ASM(ldr r4, next_task_svc);
-  ASM(ldr r4, [r4]);
-  ASM(str r4, [r1]);
-  ASM(ldr r0, [ r3, r4, lsl #2 ]);
-  ASM(ldmia r0 !, {r4 - r11});
-  ASM(msr psp, r0);
+  UTOS_ASM(ldr r4, next_task_svc);
+  UTOS_ASM(ldr r4, [r4]);
+  UTOS_ASM(str r4, [r1]);
+  UTOS_ASM(ldr r0, [ r3, r4, lsl #2 ]);
+  UTOS_ASM(ldmia r0 !, {r4 - r11});
+  UTOS_ASM(msr psp, r0);
 
   // Set exc_return value, then the process stack (PSP) will be used when bx
   // returns
-  ASM(ldr lr, exc_return_init);
-  ASM(bx lr);
+  UTOS_ASM(ldr lr, exc_return_init);
+  UTOS_ASM(bx lr);
 
   // Define C data
-  ASM(.align 4);
-  ASM(curr_task_svc :.word curr_task);
-  ASM(next_task_svc :.word next_task);
-  ASM(psp_array_svc :.word PSP_array);
-  ASM(exc_return_init :.word 0xfffffffd);
+  UTOS_ASM(.align 4);
+  UTOS_ASM(curr_task_svc :.word curr_task);
+  UTOS_ASM(next_task_svc :.word next_task);
+  UTOS_ASM(psp_array_svc :.word PSP_array);
+  UTOS_ASM(exc_return_init :.word 0xfffffffd);
 }
 
 /**
@@ -186,27 +205,27 @@ void SVC_Handler(void) {
 UTOS_EXPORT void PendSV_Handler(void) __attribute__((naked));
 void PendSV_Handler(void) {
   // Save current context
-  ASM(mrs r0, psp);            // get stack pointer
-  ASM(stmdb r0 !, {r4 - r11}); // push to stack
-  ASM(ldr r1, curr_task_);
-  ASM(ldr r2, [r1]);
-  ASM(ldr r3, psp_array_);
-  ASM(str r0, [ r3, r2, lsl #2 ]); // store r0 to r3[r2 * 4]
+  UTOS_ASM(mrs r0, psp);            // get stack pointer
+  UTOS_ASM(stmdb r0 !, {r4 - r11}); // push to stack
+  UTOS_ASM(ldr r1, curr_task_);
+  UTOS_ASM(ldr r2, [r1]);
+  UTOS_ASM(ldr r3, psp_array_);
+  UTOS_ASM(str r0, [ r3, r2, lsl #2 ]); // store r0 to r3[r2 * 4]
 
   // Load next context
-  ASM(ldr r4, next_task_);
-  ASM(ldr r4, [r4]);
-  ASM(str r4, [r1]);
-  ASM(ldr r0, [ r3, r4, lsl #2 ]);
-  ASM(ldmia r0 !, {r4 - r11});
-  ASM(msr psp, r0);
-  ASM(bx lr);
+  UTOS_ASM(ldr r4, next_task_);
+  UTOS_ASM(ldr r4, [r4]);
+  UTOS_ASM(str r4, [r1]);
+  UTOS_ASM(ldr r0, [ r3, r4, lsl #2 ]);
+  UTOS_ASM(ldmia r0 !, {r4 - r11});
+  UTOS_ASM(msr psp, r0);
+  UTOS_ASM(bx lr);
 
   // Define C data
-  ASM(.align 4);
-  ASM(curr_task_ :.word curr_task);
-  ASM(next_task_ :.word next_task);
-  ASM(psp_array_ :.word PSP_array);
+  UTOS_ASM(.align 4);
+  UTOS_ASM(curr_task_ :.word curr_task);
+  UTOS_ASM(next_task_ :.word next_task);
+  UTOS_ASM(psp_array_ :.word PSP_array);
 }
 
 /**
