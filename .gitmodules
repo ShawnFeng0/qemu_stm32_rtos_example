@@ -1,0 +1,3 @@
+[submodule "src/lib/intrusive_list"]
+	path = src/lib/intrusive_list
+	url = https://github.com/ShawnFeng0/intrusive_list.git
