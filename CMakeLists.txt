@@ -47,6 +47,7 @@ else ()
 endif ()
 
 include_directories(Core/Inc)
+include_directories(Core/ThreadSafe)
 include_directories(Drivers/STM32F4xx_HAL_Driver/Inc)
 include_directories(Drivers/CMSIS/Device/ST/STM32F4xx/Include)
 include_directories(Drivers/CMSIS/Include)
