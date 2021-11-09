@@ -1,103 +1,32 @@
-#include "stm32f4_discovery.h"
-#include "stm32f4xx_hal.h"
-
 #include <stdint.h>
 #include <stdio.h>
 
-#define LOGGER_DEBUG(fmt, ...)                                                 \
-  ({                                                                           \
-    char buffer[256];                                                          \
-    snprintf(buffer, sizeof(buffer), fmt, ##__VA_ARGS__);                      \
-    PrintDebugStr(buffer);                                                     \
-  })
-
-#ifdef __cplusplus
-#define UTOS_EXPORT extern "C"
-#else
-#define UTOS_EXPORT
-#endif
-
-#define UTOS_ASM(...) __asm volatile(#__VA_ARGS__)
-
-/**
-  \brief   Enable IRQ Interrupts
-  \details Enables IRQ interrupts by clearing the I-bit in the CPSR.
-           Can only be executed in Privileged modes.
- */
-static inline void utos_enable_irq() {
-  __ASM volatile("cpsie i" : : : "memory");
-}
-
-/**
-  \brief   Disable IRQ Interrupts
-  \details Disables IRQ interrupts by setting the I-bit in the CPSR.
-           Can only be executed in Privileged modes.
- */
-static inline void utos_disable_irq() {
-  __ASM volatile("cpsid i" : : : "memory");
-}
-
-static void PrintDebugStr(const char *str) {
-  if (!str)
-    return;
-
-  while (*str) {
-    ITM_SendChar(*str++);
-  }
-}
+#include "debug_log.h"
+#include "stm32f4_discovery.h"
+#include "stm32f4xx_hal.h"
+#include "task.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);
 
-typedef void *(*task_entry_t)(void *);
+utos::Task tasks[4];
 
-uint32_t *task_stack_init(task_entry_t task_entry, void *parameters,
-                          uint32_t *top_of_stack) {
-  uint32_t *stack_top = top_of_stack - 16;
-
-  *(stack_top + 15) = (uint32_t)0x01000000;    // xPSR register
-  *(stack_top + 14) = (uint32_t)task_entry;    // PC register
-  *(stack_top + 13) = (uint32_t)Error_Handler; // LR register
-                                               // R12 R3 R2 R1
-  *(stack_top + 8) = (uint32_t)parameters;     // R0
-
-  return stack_top;
-}
-
-void task_init(uint32_t *task, task_entry_t task_entry, void *parameters,
-               uint32_t *stack, uint32_t stack_size) {
-  *task = (uint32_t)task_stack_init(task_entry, parameters, stack + stack_size);
-}
-
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-
-uint32_t task0_stack[2048];
-uint32_t task1_stack[2048];
-uint32_t task2_stack[2048];
-uint32_t task3_stack[2048];
-
-uint32_t curr_task = 0;
-uint32_t next_task = 1;
-uint32_t PSP_array[4];
-
-#define DEFINE_TOGGLE_TASK(name, interval_ms, led)                             \
-  void *name(void *param) {                                                    \
-    LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param);                     \
-    while (1) {                                                                \
-      if (HAL_GetTick() & (interval_ms)) {                                     \
-        BSP_LED_On(led);                                                       \
-      } else {                                                                 \
-        BSP_LED_Off(led);                                                      \
-      }                                                                        \
-    }                                                                          \
+#define DEFINE_TOGGLE_TASK(name, interval_ms, led)         \
+  void *name(void *param) {                                \
+    LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param); \
+    while (1) {                                            \
+      if (HAL_GetTick() & (interval_ms)) {                 \
+        BSP_LED_On(led);                                   \
+      } else {                                             \
+        BSP_LED_Off(led);                                  \
+      }                                                    \
+    }                                                      \
   }
 
 DEFINE_TOGGLE_TASK(task0, 512, LED3)
 DEFINE_TOGGLE_TASK(task1, 1024, LED4)
 DEFINE_TOGGLE_TASK(task2, 2048, LED5)
 DEFINE_TOGGLE_TASK(task3, 4096, LED6)
-
-void StartScheduler();
 
 int main(void) {
   /* STM32F4xx HAL library initialization:
@@ -107,6 +36,8 @@ int main(void) {
        - Global MSP (MCU Support Package) initialization
      */
   HAL_Init();
+
+  LOGGER_INFO("System starting...");
 
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
@@ -121,122 +52,16 @@ int main(void) {
   /* Configure KEY Button */
   BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_GPIO);
 
-  task_init(&PSP_array[0], task0, (void *)10, task0_stack,
-            ARRAY_SIZE(task0_stack));
-  task_init(&PSP_array[1], task1, (void *)11, task1_stack,
-            ARRAY_SIZE(task1_stack));
-  task_init(&PSP_array[2], task2, (void *)12, task2_stack,
-            ARRAY_SIZE(task2_stack));
-  task_init(&PSP_array[3], task3, (void *)13, task3_stack,
-            ARRAY_SIZE(task3_stack));
+  task_init(task0, (void *)10, 0, 2048);
+  task_init(task1, (void *)11, 1, 2048);
+  task_init(task2, (void *)12, 2, 2048);
+  task_init(task3, (void *)13, 3, 2048);
 
-  StartScheduler();
+  start_scheduler();
 
   /* Infinite loop */
   while (1) {
   }
-}
-
-static void StartFirstTask(void) __attribute__((naked));
-static void StartFirstTask(void) {
-  /* Use the NVIC offset register to locate the stack. */
-  UTOS_ASM(ldr r0, = 0xE000ED08);
-  UTOS_ASM(ldr r0, [r0]);
-  UTOS_ASM(ldr r0, [r0]);
-
-  /* Set the msp back to the start of the stack. */
-  UTOS_ASM(msr msp, r0);
-
-  /* Clear the bit that indicates the FPU is in use */
-  UTOS_ASM(mov r0, #0);
-  UTOS_ASM(msr control, r0);
-
-  /* Globally enable interrupts. */
-  UTOS_ASM(cpsie i);
-  UTOS_ASM(cpsie f);
-  UTOS_ASM(dsb);
-  UTOS_ASM(isb);
-
-  /* System call to start first task. */
-  UTOS_ASM(svc 0);
-  UTOS_ASM(nop);
-}
-
-void StartScheduler() {
-  curr_task = 0;
-  NVIC_SetPriority(PendSV_IRQn, 0xff);
-  //  __set_CONTROL(0x3);
-  //  __ISB();
-  StartFirstTask();
-}
-
-/**
- * @brief This function handles System service call via SWI instruction.
- */
-UTOS_EXPORT void SVC_Handler(void) __attribute__((naked));
-void SVC_Handler(void) {
-  UTOS_ASM(ldr r1, curr_task_svc);
-  UTOS_ASM(ldr r3, psp_array_svc);
-
-  // Load next context
-  UTOS_ASM(ldr r4, next_task_svc);
-  UTOS_ASM(ldr r4, [r4]);
-  UTOS_ASM(str r4, [r1]);
-  UTOS_ASM(ldr r0, [ r3, r4, lsl #2 ]);
-  UTOS_ASM(ldmia r0 !, {r4 - r11});
-  UTOS_ASM(msr psp, r0);
-
-  // Set exc_return value, then the process stack (PSP) will be used when bx
-  // returns
-  UTOS_ASM(ldr lr, exc_return_init);
-  UTOS_ASM(bx lr);
-
-  // Define C data
-  UTOS_ASM(.align 4);
-  UTOS_ASM(curr_task_svc :.word curr_task);
-  UTOS_ASM(next_task_svc :.word next_task);
-  UTOS_ASM(psp_array_svc :.word PSP_array);
-  UTOS_ASM(exc_return_init :.word 0xfffffffd);
-}
-
-/**
- * @brief This function handles Pendable request for system service.
- */
-UTOS_EXPORT void PendSV_Handler(void) __attribute__((naked));
-void PendSV_Handler(void) {
-  // Save current context
-  UTOS_ASM(mrs r0, psp);            // get stack pointer
-  UTOS_ASM(stmdb r0 !, {r4 - r11}); // push to stack
-  UTOS_ASM(ldr r1, curr_task_);
-  UTOS_ASM(ldr r2, [r1]);
-  UTOS_ASM(ldr r3, psp_array_);
-  UTOS_ASM(str r0, [ r3, r2, lsl #2 ]); // store r0 to r3[r2 * 4]
-
-  // Load next context
-  UTOS_ASM(ldr r4, next_task_);
-  UTOS_ASM(ldr r4, [r4]);
-  UTOS_ASM(str r4, [r1]);
-  UTOS_ASM(ldr r0, [ r3, r4, lsl #2 ]);
-  UTOS_ASM(ldmia r0 !, {r4 - r11});
-  UTOS_ASM(msr psp, r0);
-  UTOS_ASM(bx lr);
-
-  // Define C data
-  UTOS_ASM(.align 4);
-  UTOS_ASM(curr_task_ :.word curr_task);
-  UTOS_ASM(next_task_ :.word next_task);
-  UTOS_ASM(psp_array_ :.word PSP_array);
-}
-
-/**
- * @brief This function handles System tick timer.
- */
-UTOS_EXPORT void SysTick_Handler(void) {
-  HAL_IncTick();
-
-  next_task = (curr_task + 1) % 4;
-
-  SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk; // Trigger PendSV interrupt
 }
 
 /**

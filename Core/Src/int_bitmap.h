@@ -8,7 +8,7 @@ namespace utos {
 
 class IntBitmap {
  public:
-  IntBitmap() : bits_(0) {}
+  IntBitmap() noexcept : bits_(0) {}
 
   static constexpr uint32_t count() { return sizeof(IntBitmap::bits_) * 8; }
 
