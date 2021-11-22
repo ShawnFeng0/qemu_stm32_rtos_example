@@ -2,23 +2,20 @@
 #include <stdio.h>
 
 #include "debug_log.h"
-#include "stm32f4_discovery.h"
 #include "stm32f4xx_hal.h"
 #include "task.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);
 
-utos::Task tasks[4];
-
 #define DEFINE_TOGGLE_TASK(name, interval_ms, led)         \
   void *name(void *param) {                                \
     LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param); \
+    auto timestamp = HAL_GetTick();                        \
     while (1) {                                            \
-      if (HAL_GetTick() & (interval_ms)) {                 \
-        BSP_LED_On(led);                                   \
-      } else {                                             \
-        BSP_LED_Off(led);                                  \
+      if (HAL_GetTick() - timestamp > (interval_ms)) {     \
+        timestamp = HAL_GetTick();                         \
+        LOGGER_DEBUG("%s: heartbeat", #name);              \
       }                                                    \
     }                                                      \
   }
@@ -42,15 +39,7 @@ int main(void) {
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
 
-  /* Configure LED3, LED4, LED5 and LED6 */
-  BSP_LED_Init(LED3);
-  BSP_LED_Init(LED4);
-  BSP_LED_Init(LED5);
-  BSP_LED_Init(LED6);
   __enable_irq();
-
-  /* Configure KEY Button */
-  BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_GPIO);
 
   task_init(task0, (void *)10, 0, 2048);
   task_init(task1, (void *)11, 1, 2048);
