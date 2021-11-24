@@ -2,16 +2,18 @@
 // Created by shawnfeng on 2021/11/7.
 //
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "common.h"
 #include "stm32f407xx.h"
+#include "tick.h"
 
 static inline void PrintDebugStr(const char *str) {
   if (!str) return;
 
-  IrqLockGuard irq_lock_guard;
+  utos::internal::IrqLockGuard irq_lock_guard;
   while (*str) {
     ITM_SendChar(*str++);
   }
@@ -40,14 +42,15 @@ static inline void PrintDebugStr(const char *str) {
 #define LOGGER_ERROR_COLOR "\x1b[31m"
 #define LOGGER_FATAL_COLOR "\x1b[35m"
 
-#define LOGGER_OUT(level, fmt, ...)                                            \
-  do {                                                                         \
-    char buffer[256];                                                          \
-    snprintf(buffer, sizeof(buffer),                                           \
-             "%s%s/(%s:%d %s) %s" fmt LOGGER_RESET_COLOR "\r\n",               \
-             LOGGER_RESET_COLOR, LOGGER_LEVEL_##level, __FILENAME__, __LINE__, \
-             __FUNCTION__, LOGGER_##level##_COLOR, ##__VA_ARGS__);             \
-    PrintDebugStr(buffer);                                                     \
+#define LOGGER_OUT(level, fmt, ...)                                      \
+  do {                                                                   \
+    char buffer[256];                                                    \
+    snprintf(buffer, sizeof(buffer),                                     \
+             "%s%.3f %s/(%s:%d %s) %s" fmt LOGGER_RESET_COLOR "\r\n",    \
+             LOGGER_RESET_COLOR, utos::time::get_time_ms() / 1000.f,     \
+             LOGGER_LEVEL_##level, __FILENAME__, __LINE__, __FUNCTION__, \
+             LOGGER_##level##_COLOR, ##__VA_ARGS__);                     \
+    PrintDebugStr(buffer);                                               \
   } while (0)
 
 #define LOGGER_TRACE(fmt, ...) LOGGER_OUT(TRACE, fmt, ##__VA_ARGS__)

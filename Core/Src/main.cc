@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "debug_log.h"
+#include "event.h"
 #include "stm32f4xx_hal.h"
 #include "task.h"
 
@@ -12,7 +13,7 @@ static void Error_Handler(void);
   void *name(void *param) {                                \
     LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param); \
     auto timestamp = HAL_GetTick();                        \
-    while (1) {                                            \
+    while (true) {                                         \
       if (HAL_GetTick() - timestamp > (interval_ms)) {     \
         timestamp = HAL_GetTick();                         \
         LOGGER_DEBUG("%s: heartbeat", #name);              \
@@ -24,6 +25,35 @@ DEFINE_TOGGLE_TASK(task0, 512, LED3)
 DEFINE_TOGGLE_TASK(task1, 1024, LED4)
 DEFINE_TOGGLE_TASK(task2, 2048, LED5)
 DEFINE_TOGGLE_TASK(task3, 4096, LED6)
+
+utos::Event event;
+[[noreturn]] void *task_notify(void *param) {
+  LOGGER_DEBUG("param: %u", (unsigned)param);
+  auto timestamp = HAL_GetTick();
+  while (true) {
+    if (HAL_GetTick() - timestamp > 1000) {
+      timestamp = HAL_GetTick();
+      LOGGER_DEBUG("post event...");
+      event.notify_all();
+    }
+  }
+}
+
+[[noreturn]] void *task_wait(void *param) {
+  LOGGER_DEBUG("param: %u", (unsigned)param);
+  while (true) {
+    event.wait(utos_current_task, 1000);
+    LOGGER_DEBUG("received event.");
+  }
+}
+
+[[noreturn]] void *task_wait1(void *param) {
+  LOGGER_DEBUG("param: %u", (unsigned)param);
+  while (true) {
+    event.wait(utos_current_task, 1000);
+    LOGGER_DEBUG("received event.");
+  }
+}
 
 int main(void) {
   /* STM32F4xx HAL library initialization:
@@ -39,12 +69,13 @@ int main(void) {
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
 
-  __enable_irq();
-
-  task_init(task0, (void *)10, 0, 2048);
-  task_init(task1, (void *)11, 1, 2048);
-  task_init(task2, (void *)12, 2, 2048);
-  task_init(task3, (void *)13, 3, 2048);
+  //  task_init(task0, (void *)10, 0, 2048);
+  //  task_init(task1, (void *)11, 1, 2048);
+  //  task_init(task2, (void *)12, 2, 2048);
+  //  task_init(task3, (void *)13, 3, 2048);
+  task_init(task_notify, (void *)13, 3, 2048);
+  task_init(task_wait, (void *)13, 3, 2048);
+  task_init(task_wait1, (void *)13, 3, 2048);
 
   start_scheduler();
 

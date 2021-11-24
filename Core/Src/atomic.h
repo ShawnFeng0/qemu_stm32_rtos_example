@@ -26,8 +26,9 @@
 
 namespace utos {
 
-template <typename T> class atomic {
-public:
+template <typename T>
+class atomic {
+ public:
   // Ensure that all operations are lock-free, so that 'atomic' can be used from
   // IRQ handlers. This might not be required everywhere though.
   static_assert(__atomic_always_lock_free(sizeof(T), nullptr),
@@ -109,13 +110,13 @@ public:
                                      __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
   }
 
-private:
+ private:
   T value_{};
 };
 
 using atomic_int = atomic<int>;
 using atomic_bool = atomic<bool>;
 
-} // namespace utos
+}  // namespace utos
 
 #endif /* __cplusplus */

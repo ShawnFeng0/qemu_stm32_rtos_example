@@ -7,8 +7,10 @@
 #include <stm32f407xx.h>
 #include <stm32f4xx_hal.h>
 
+#include "event.h"
 #include "int_bitmap.h"
 #include "intrusive_list/list.h"
+#include "tick.h"
 
 [[noreturn]] void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -27,7 +29,8 @@ static utos::Task *utos_idle_task;
 
 utos::Task *utos_current_task;
 
-static utos::TaskList utos_tasks_list;
+static utos::TaskList utos_ready_task_list;
+static utos::TaskList utos_timeout_task_list;
 
 static constexpr auto kUtosMaxPriority = utos::IntBitmap::count() - 1;
 static utos::IntBitmap utos_task_priority_bitmap;
@@ -88,8 +91,8 @@ static inline utos::Task *create_task(void *(*task_entry)(void *),
 }
 
 static inline utos::Task *task_register(utos::Task *task) {
-  IrqLockGuard irq_lock_guard;
-  utos_tasks_list.push_back(*task);
+  utos::internal::IrqLockGuard irq_lock_guard;
+  utos_ready_task_list.push_back(*task);
   utos_task_priority_bitmap.set(task->priority);
   return task;
 }
@@ -112,15 +115,20 @@ utos::Task *task_init(utos::task_entry_t task_entry, void *parameters,
       create_task(task_entry, parameters, priority, stack_size));
 }
 
-void task_scheduling() {
-  IrqLockGuard irq_lock_guard;
+UTOS_EXPORT void task_scheduling() {
+  utos::internal::IrqLockGuard irq_lock_guard;
 
-  if (utos_tasks_list.empty()) {
+  if (utos_ready_task_list.empty()) {
     utos_current_task = utos_idle_task;
   } else {
-    utos_tasks_list.rotate_left();
-    utos_current_task = &utos_tasks_list.front();
+    utos_ready_task_list.rotate_left();
+    utos_current_task = &utos_ready_task_list.front();
   }
+}
+
+void task_mark_unready(utos::Task *task) { utos_ready_task_list.remove(*task); }
+void task_mark_ready(utos::Task *task) {
+  utos_ready_task_list.push_back(*task);
 }
 
 /**
@@ -189,6 +197,11 @@ void PendSV_Handler(void) {
 UTOS_EXPORT void SysTick_Handler(void) {
   HAL_IncTick();
 
-  if (utos_current_task)
-    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;  // Trigger PendSV interrupt
+  utos::time::increase(HAL_GetTickFreq());
+
+  if (utos_current_task) task_yield();
+}
+
+void task_yield() {
+  SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;  // Trigger PendSV interrupt
 }
