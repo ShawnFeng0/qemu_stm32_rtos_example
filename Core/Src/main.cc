@@ -69,15 +69,15 @@ int main(void) {
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
 
-  //  task_init(task0, (void *)10, 0, 2048);
-  //  task_init(task1, (void *)11, 1, 2048);
-  //  task_init(task2, (void *)12, 2, 2048);
-  //  task_init(task3, (void *)13, 3, 2048);
-  task_init(task_notify, (void *)13, 3, 2048);
-  task_init(task_wait, (void *)13, 3, 2048);
-  task_init(task_wait1, (void *)13, 3, 2048);
+  //  utos_task_init(task0, (void *)10, 0, 2048);
+  //  utos_task_init(task1, (void *)11, 1, 2048);
+  //  utos_task_init(task2, (void *)12, 2, 2048);
+  //  utos_task_init(task3, (void *)13, 3, 2048);
+  utos_task_init(task_notify, (void *)13, 3, 2048);
+  utos_task_init(task_wait, (void *)13, 3, 2048);
+  utos_task_init(task_wait1, (void *)13, 3, 2048);
 
-  start_scheduler();
+  utos_start_scheduler();
 
   /* Infinite loop */
   while (1) {

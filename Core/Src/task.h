@@ -41,12 +41,10 @@ typedef void *(*task_entry_t)(void *);
 
 extern utos::Task *utos_current_task;
 
-utos::Task *task_init(utos::task_entry_t task_entry, void *parameters,
-                      uint32_t priority, uint32_t stack_size);
+utos::Task *utos_task_init(utos::task_entry_t task_entry, void *parameters,
+                           uint32_t priority, uint32_t stack_size);
 
-void task_mark_unready(utos::Task *task);
-void task_mark_ready(utos::Task *task);
-
-UTOS_EXPORT void start_scheduler();
-
-void task_yield();
+void utos_task_mark_unready(utos::Task *task);
+void utos_task_mark_ready(utos::Task *task);
+void utos_start_scheduler();
+void utos_task_yield();
