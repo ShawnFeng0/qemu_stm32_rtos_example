@@ -33,10 +33,15 @@ namespace internal {
 class IrqLockGuard {
  public:
   IrqLockGuard() {
-    if (++critical_nesting() == 1) __disable_irq();
+    __disable_irq();
+    __DSB();
+    __ISB();
+    ++critical_nesting();
   }
   ~IrqLockGuard() {
-    if (--critical_nesting() == 0) __enable_irq();
+    if (--critical_nesting() == 0) {
+      __enable_irq();
+    }
   }
 
  private:

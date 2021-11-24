@@ -88,7 +88,7 @@ void PendSV_Handler(void) {
   UTOS_ASM(str r0, [r2]);                 // store new psp pointer
 
   UTOS_ASM(stmdb sp !, {r0, r3});
-  UTOS_ASM(bl task_scheduling);
+  UTOS_ASM(bl utos_task_scheduling);
   UTOS_ASM(ldmia sp !, {r0, r3});
 
   // Load next context
@@ -115,10 +115,7 @@ void PendSV_Handler(void) {
  */
 UTOS_EXPORT void SysTick_Handler(void) {
   HAL_IncTick();
-
-  utos::time::increase(HAL_GetTickFreq());
-
-  if (utos_current_task) utos_port_task_yield();
+  utos_task_system_tick_handler(HAL_GetTickFreq());
 }
 
 uint32_t *utos_port_task_stack_init(utos::task_entry_t task_entry,

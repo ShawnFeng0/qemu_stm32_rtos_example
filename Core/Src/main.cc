@@ -9,49 +9,36 @@
 void SystemClock_Config(void);
 static void Error_Handler(void);
 
-#define DEFINE_TOGGLE_TASK(name, interval_ms, led)         \
-  void *name(void *param) {                                \
-    LOGGER_DEBUG("%s: param: %u", #name, (unsigned)param); \
-    auto timestamp = HAL_GetTick();                        \
-    while (true) {                                         \
-      if (HAL_GetTick() - timestamp > (interval_ms)) {     \
-        timestamp = HAL_GetTick();                         \
-        LOGGER_DEBUG("%s: heartbeat", #name);              \
-      }                                                    \
-    }                                                      \
-  }
-
-DEFINE_TOGGLE_TASK(task0, 512, LED3)
-DEFINE_TOGGLE_TASK(task1, 1024, LED4)
-DEFINE_TOGGLE_TASK(task2, 2048, LED5)
-DEFINE_TOGGLE_TASK(task3, 4096, LED6)
-
 utos::Event event;
+
 [[noreturn]] void *task_notify(void *param) {
   LOGGER_DEBUG("param: %u", (unsigned)param);
-  auto timestamp = HAL_GetTick();
   while (true) {
-    if (HAL_GetTick() - timestamp > 1000) {
-      timestamp = HAL_GetTick();
-      LOGGER_DEBUG("post event...");
-      event.notify_all();
-    }
+    utos_task_sleep(1000);
+    LOGGER_DEBUG("post event...");
+    event.notify_all();
   }
 }
 
 [[noreturn]] void *task_wait(void *param) {
   LOGGER_DEBUG("param: %u", (unsigned)param);
   while (true) {
-    event.wait(utos_current_task, 1000);
-    LOGGER_DEBUG("received event.");
+    if (event.wait(-1)) {
+      LOGGER_DEBUG("Permanently block reading");
+    } else {
+      LOGGER_ERROR("ERROR: Permanently block reading");
+    }
   }
 }
 
-[[noreturn]] void *task_wait1(void *param) {
+[[noreturn]] void *task_timeout(void *param) {
   LOGGER_DEBUG("param: %u", (unsigned)param);
   while (true) {
-    event.wait(utos_current_task, 1000);
-    LOGGER_DEBUG("received event.");
+    if (event.wait(300)) {
+      LOGGER_DEBUG("received event.");
+    } else {
+      LOGGER_DEBUG("received timeout.");
+    }
   }
 }
 
@@ -69,13 +56,9 @@ int main(void) {
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
 
-  //  utos_task_init(task0, (void *)10, 0, 2048);
-  //  utos_task_init(task1, (void *)11, 1, 2048);
-  //  utos_task_init(task2, (void *)12, 2, 2048);
-  //  utos_task_init(task3, (void *)13, 3, 2048);
-  utos_task_init(task_notify, (void *)13, 3, 2048);
-  utos_task_init(task_wait, (void *)13, 3, 2048);
-  utos_task_init(task_wait1, (void *)13, 3, 2048);
+  utos_task_create("task_notify", task_notify, (void *)13, 3, 2048);
+  utos_task_create("task_wait", task_wait, (void *)13, 3, 2048);
+  utos_task_create("task_timeout", task_timeout, (void *)13, 3, 2048);
 
   utos_start_scheduler();
 
