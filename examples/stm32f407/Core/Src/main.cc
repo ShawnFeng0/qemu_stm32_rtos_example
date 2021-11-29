@@ -1,10 +1,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "stm32f4xx_hal.h"
 #include "utos/debug_log.h"
 #include "utos/event.h"
 #include "utos/task.h"
-#include "stm32f4xx_hal.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);
@@ -42,6 +42,17 @@ utos::Event event;
   }
 }
 
+[[noreturn]] void *task_high_priority(void *param) {
+  LOGGER_DEBUG("param: %u", (unsigned)param);
+  while (true) {
+    if (utos::time::get_time_ms() & 4096) {
+      __NOP();
+    } else {
+      utos_task_sleep(10);
+    }
+  }
+}
+
 int main(void) {
   /* STM32F4xx HAL library initialization:
        - Configure the Flash prefetch, instruction and Data caches
@@ -56,9 +67,14 @@ int main(void) {
   /* Configure the system clock to 168 MHz */
   SystemClock_Config();
 
-  utos_task_create("task_notify", task_notify, (void *)13, 3, 2048);
-  utos_task_create("task_wait", task_wait, (void *)13, 3, 2048);
-  utos_task_create("task_timeout", task_timeout, (void *)13, 3, 2048);
+  utos_task_create("task_notify", task_notify, (void *)13, utos_min_priority(),
+                   2048);
+  utos_task_create("task_wait", task_wait, (void *)13, utos_min_priority(),
+                   2048);
+  utos_task_create("task_timeout", task_timeout, (void *)13,
+                   utos_min_priority(), 2048);
+  utos_task_create("task_high_priority", task_high_priority, (void *)13,
+                   utos_max_priority(), 2048);
 
   utos_start_scheduler();
 

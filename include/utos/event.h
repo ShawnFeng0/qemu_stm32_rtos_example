@@ -27,7 +27,7 @@ class Event : internal::Noncopyable {
   void add_to_wait_list(Task *task) { event_list.push_back(*task); }
   void remove_from_wait_list(Task *task) { event_list.remove_if_exists(*task); }
 
-  using EventList = intrusive_list::list<Task, &Task::event_node>;
+  using EventList = intrusive_list::list<Task, &Task::node_for_event_list>;
   EventList event_list;
 };
 

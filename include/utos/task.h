@@ -7,6 +7,13 @@
 
 namespace utos {
 
+struct Task;
+struct TaskNode {
+  TaskNode *next;
+  TaskNode *prev;
+  Task *task;  // For debug
+};
+
 struct Task : internal::Noncopyable {
   using WaitCallback = void(Task *, void *user_data);
 
@@ -14,7 +21,7 @@ struct Task : internal::Noncopyable {
   uint32_t *stack_raw;
   uint32_t priority;
   char name[16];
-  intrusive_list::list_node task_node;
+  TaskNode node_for_ready_list;
 
   enum class State {
     RUNNING,
@@ -22,13 +29,13 @@ struct Task : internal::Noncopyable {
     BLOCK,
   } state;
 
-  intrusive_list::list_node event_node;
+  TaskNode node_for_event_list;
   enum class EventResult {
     RECEIVED,
     TIMEOUT,
   } event_result;
 
-  intrusive_list::list_node timeout_node;
+  TaskNode node_for_timeout_list;
   uint64_t timeout_deadline_ms;
   WaitCallback *timeout_cb;
   void *timeout_cb_data;
@@ -43,6 +50,8 @@ extern utos::Task *utos_current_task;
 utos::Task *utos_task_create(const char *name, utos::task_entry_t task_entry,
                              void *parameters, uint32_t priority,
                              uint32_t stack_size);
+int utos_max_priority();
+int utos_min_priority();
 
 utos::Task *utos_task_current();
 
