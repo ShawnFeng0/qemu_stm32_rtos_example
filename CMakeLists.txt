@@ -46,16 +46,16 @@ else ()
     add_compile_options(-Og -g)
 endif ()
 
-include_directories(Core/Inc)
-include_directories(Core/ThreadSafe)
-include_directories(Drivers/STM32F4xx_HAL_Driver/Inc)
-include_directories(Drivers/CMSIS/Device/ST/STM32F4xx/Include)
-include_directories(Drivers/CMSIS/Include)
-include_directories(Drivers/bsp)
+include_directories(examples/stm32f407/Core/Inc)
+include_directories(examples/stm32f407/Core/ThreadSafe)
+include_directories(examples/stm32f407/Drivers/STM32F4xx_HAL_Driver/Inc)
+include_directories(examples/stm32f407/Drivers/CMSIS/Device/ST/STM32F4xx/Include)
+include_directories(examples/stm32f407/Drivers/CMSIS/Include)
+include_directories(examples/stm32f407/Drivers/bsp)
 
 add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F407xx)
 
-file(GLOB_RECURSE SOURCES "Core/*.*" "Drivers/*.*" "Drivers/bsp/stm32f4_discovery.c")
+file(GLOB_RECURSE SOURCES "examples/stm32f407/Core/*.*" "examples/stm32f407/Drivers/*.*" "examples/stm32f407/Drivers/bsp/stm32f4_discovery.c")
 
 aux_source_directory(src UTOS_KERNEL_SOURCE)
 include_directories(include)
