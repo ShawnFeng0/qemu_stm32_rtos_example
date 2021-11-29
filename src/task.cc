@@ -2,15 +2,15 @@
 // Created by shawnfeng on 2021/8/20.
 //
 
-#include "task.h"
+#include "utos/task.h"
 
 #include <cstdio>
 #include <cstring>
 
-#include "event.h"
-#include "int_bitmap.h"
+#include "utos/event.h"
+#include "utos/int_bitmap.h"
+#include "utos/tick.h"
 #include "intrusive_list/list.h"
-#include "tick.h"
 
 // Need to be implemented externally
 void utos_port_start_first_task();

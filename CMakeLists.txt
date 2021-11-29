@@ -57,6 +57,9 @@ add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F407xx)
 
 file(GLOB_RECURSE SOURCES "Core/*.*" "Drivers/*.*" "Drivers/bsp/stm32f4_discovery.c")
 
+aux_source_directory(src UTOS_KERNEL_SOURCE)
+include_directories(include)
+
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F407VGTX_FLASH.ld)
 
 add_link_options(-Wl,-gc-sections,--print-memory-usage,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map)
@@ -65,7 +68,7 @@ add_link_options(-T ${LINKER_SCRIPT})
 
 add_subdirectory(src/lib/intrusive_list)
 link_libraries(intrusive_list)
-add_executable(${PROJECT_NAME}.elf ${SOURCES} ${LINKER_SCRIPT})
+add_executable(${PROJECT_NAME}.elf ${UTOS_KERNEL_SOURCE} ${SOURCES} ${LINKER_SCRIPT})
 
 set(HEX_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.hex)
 set(BIN_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.bin)

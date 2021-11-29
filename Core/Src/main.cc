@@ -1,10 +1,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "debug_log.h"
-#include "event.h"
+#include "utos/debug_log.h"
+#include "utos/event.h"
+#include "utos/task.h"
 #include "stm32f4xx_hal.h"
-#include "task.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);

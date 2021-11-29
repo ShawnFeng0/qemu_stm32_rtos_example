@@ -5,9 +5,9 @@
 #include <stm32f407xx.h>
 #include <stm32f4xx_hal.h>
 
-#include "common.h"
-#include "task.h"
-#include "tick.h"
+#include "utos/common.h"
+#include "utos/task.h"
+#include "utos/tick.h"
 
 [[noreturn]] void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */

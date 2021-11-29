@@ -2,9 +2,9 @@
 // Created by shawnfeng on 2021/11/23.
 //
 
-#include "event.h"
+#include "utos/event.h"
 
-#include "tick.h"
+#include "utos/tick.h"
 
 bool utos::Event::wait(int32_t timeout_ms) {
   Task *current_task = utos_task_current();
