@@ -4,12 +4,15 @@
 #include "stm32f4xx_hal.h"
 #include "utos/debug_log.h"
 #include "utos/event.h"
+#include "utos/mutex.h"
 #include "utos/task.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);
 
 utos::Event event;
+utos::Mutex mutex;
+int num = 0;
 
 [[noreturn]] void *task_notify(void *param) {
   LOGGER_DEBUG("param: %u", (unsigned)param);
@@ -53,6 +56,28 @@ utos::Event event;
   }
 }
 
+void delay(uint32_t ticks) {
+  while (ticks--) {
+    __NOP();
+  }
+}
+
+[[noreturn]] void *task_mutex_test(void *param) {
+  LOGGER_DEBUG("param: %u", (unsigned)param);
+  for (int i = 0; i < 100000; i++) {
+    mutex.lock();
+    auto n = num;
+    delay(1000);
+    num = n + 1;
+    mutex.unlock();
+  }
+
+  while (true) {
+    utos_task_sleep(1000);
+    LOGGER_DEBUG("num: %d", num);
+  }
+}
+
 int main(void) {
   /* STM32F4xx HAL library initialization:
        - Configure the Flash prefetch, instruction and Data caches
@@ -74,6 +99,10 @@ int main(void) {
   utos_task_create("task_timeout", task_timeout, (void *)13,
                    utos_min_priority(), 2048);
   utos_task_create("task_high_priority", task_high_priority, (void *)13,
+                   utos_max_priority(), 2048);
+  utos_task_create("task_mutex_test", task_mutex_test, (void *)13,
+                   utos_max_priority(), 2048);
+  utos_task_create("task_mutex_test", task_mutex_test, (void *)13,
                    utos_max_priority(), 2048);
 
   utos_start_scheduler();

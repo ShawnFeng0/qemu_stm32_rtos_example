@@ -3,7 +3,6 @@
 //
 
 #include "utos/event.h"
-
 #include "utos/tick.h"
 
 bool utos::Event::wait(int32_t timeout_ms) {
@@ -12,7 +11,7 @@ bool utos::Event::wait(int32_t timeout_ms) {
   {
     internal::IrqLockGuard irq_lock_guard;
 
-    utos_task_mark_unready(current_task);
+    utos_task_suspend(current_task);
 
     if (timeout_ms >= 0) {
       utos_task_register_timeout(
@@ -20,7 +19,7 @@ bool utos::Event::wait(int32_t timeout_ms) {
           [](Task *t, void *cb_data) {
             auto *event = static_cast<Event *>(cb_data);
             event->remove_from_wait_list(t);
-            utos_task_mark_ready(t);
+            utos_task_ready(t);
             t->event_result = Task::EventResult::TIMEOUT;
           },
           this, time::get_time_ms() + timeout_ms);
@@ -42,7 +41,7 @@ void utos::Event::notify_one() {
     event_list.pop_front();
 
     utos_task_unregister_timeout(&task);
-    utos_task_mark_ready(&task);
+    utos_task_ready(&task);
 
     task.event_result = Task::EventResult::RECEIVED;
   }
@@ -56,7 +55,7 @@ void utos::Event::notify_all() {
     event_list.pop_front();
 
     utos_task_unregister_timeout(&task);
-    utos_task_mark_ready(&task);
+    utos_task_ready(&task);
 
     task.event_result = Task::EventResult::RECEIVED;
   }

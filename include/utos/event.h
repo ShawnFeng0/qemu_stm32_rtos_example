@@ -2,6 +2,8 @@
 // Created by shawnfeng on 2021/11/12.
 //
 
+#pragma once
+
 #include "intrusive_list/list.h"
 #include "task.h"
 
@@ -18,7 +20,7 @@ class Event : internal::Noncopyable {
    * @return true if the event occurs
    * @return false otherwise
    */
-  bool wait(int32_t timeout_ms);
+  bool wait(int32_t timeout_ms = -1);
 
   void notify_one();
   void notify_all();
@@ -27,7 +29,7 @@ class Event : internal::Noncopyable {
   void add_to_wait_list(Task *task) { event_list.push_back(*task); }
   void remove_from_wait_list(Task *task) { event_list.remove_if_exists(*task); }
 
-  using EventList = intrusive_list::list<Task, &Task::node_for_event_list>;
+  using EventList = intrusive_list::list<Task, &Task::event_list_node>;
   EventList event_list;
 };
 

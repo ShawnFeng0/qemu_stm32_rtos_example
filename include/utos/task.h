@@ -15,29 +15,28 @@ struct TaskNode {
 };
 
 struct Task : internal::Noncopyable {
-  using WaitCallback = void(Task *, void *user_data);
+  using TimeoutCallback = void(Task *, void *user_data);
 
   uint32_t *stack;
   uint32_t *stack_raw;
   uint32_t priority;
   char name[16];
-  TaskNode node_for_ready_list;
-
   enum class State {
-    RUNNING,
     READY,
-    BLOCK,
+    SUSPEND,
   } state;
 
-  TaskNode node_for_event_list;
+  TaskNode ready_list_node;
+
+  TaskNode event_list_node;
   enum class EventResult {
     RECEIVED,
     TIMEOUT,
   } event_result;
 
-  TaskNode node_for_timeout_list;
+  TaskNode timeout_list_node;
   uint64_t timeout_deadline_ms;
-  WaitCallback *timeout_cb;
+  TimeoutCallback *timeout_cb;
   void *timeout_cb_data;
 };
 
@@ -55,14 +54,15 @@ int utos_min_priority();
 
 utos::Task *utos_task_current();
 
-void utos_task_mark_unready(utos::Task *task);
-void utos_task_mark_ready(utos::Task *task);
+void utos_task_suspend(utos::Task *task);
+void utos_task_ready(utos::Task *task);
 void utos_start_scheduler();
 void utos_task_yield();
 
 // For sleep
-void utos_task_register_timeout(utos::Task *task, utos::Task::WaitCallback cb,
-                                void *cb_data, uint64_t deadline_time_ms);
+void utos_task_register_timeout(utos::Task *task,
+                                utos::Task::TimeoutCallback cb, void *cb_data,
+                                uint64_t deadline_time_ms);
 void utos_task_unregister_timeout(utos::Task *task);
 void utos_task_sleep(uint32_t timeout_ms);
 

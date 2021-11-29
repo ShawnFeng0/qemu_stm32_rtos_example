@@ -29,10 +29,10 @@ utos::Task *utos_current_task;
 static utos::IntBitmap utos_task_priority_bitmap;
 static constexpr auto kUtosMaxPriority = utos::IntBitmap::count() - 1;
 static constexpr auto kUtosMinPriority = 0;
-static intrusive_list::list<utos::Task, &utos::Task::node_for_ready_list>
+static intrusive_list::list<utos::Task, &utos::Task::ready_list_node>
     utos_ready_task_list[kUtosMaxPriority + 1];
 
-static intrusive_list::list<utos::Task, &utos::Task::node_for_timeout_list>
+static intrusive_list::list<utos::Task, &utos::Task::timeout_list_node>
     utos_timeout_task_list;
 
 static inline utos::Task *create_task(const char *name,
@@ -44,9 +44,9 @@ static inline utos::Task *create_task(const char *name,
 
   strlcpy(task->name, name, sizeof(task->name));
 
-  task->node_for_ready_list.task = task;
-  task->node_for_event_list.task = task;
-  task->node_for_timeout_list.task = task;
+  task->ready_list_node.task = task;
+  task->event_list_node.task = task;
+  task->timeout_list_node.task = task;
 
   task->stack = utos_port_task_stack_init(task_entry, parameters,
                                           task->stack_raw + stack_size);
@@ -65,7 +65,7 @@ utos::Task *utos_task_create(const char *name, utos::task_entry_t task_entry,
                              uint32_t stack_size) {
   utos::Task *task =
       create_task(name, task_entry, parameters, priority, stack_size);
-  utos_task_mark_ready(task);
+  utos_task_ready(task);
   return task;
 }
 
@@ -84,22 +84,25 @@ void utos_task_scheduling() {
   }
 }
 
-void utos_task_mark_ready(utos::Task *task) {
+void utos_task_ready(utos::Task *task) {
   utos::internal::IrqLockGuard irq_lock_guard;
   utos_ready_task_list[task->priority].push_back(*task);
   utos_task_priority_bitmap.set(task->priority);
+  task->state = utos::Task::State::READY;
 }
 
-void utos_task_mark_unready(utos::Task *task) {
+void utos_task_suspend(utos::Task *task) {
   utos::internal::IrqLockGuard irq_lock_guard;
   utos_ready_task_list[task->priority].remove_if_exists(*task);
 
   if (utos_ready_task_list[task->priority].empty())
     utos_task_priority_bitmap.clear(task->priority);
+  task->state = utos::Task::State::SUSPEND;
 }
 
-void utos_task_register_timeout(utos::Task *task, utos::Task::WaitCallback cb,
-                                void *cb_data, uint64_t deadline_time_ms) {
+void utos_task_register_timeout(utos::Task *task,
+                                utos::Task::TimeoutCallback cb, void *cb_data,
+                                uint64_t deadline_time_ms) {
   utos::internal::IrqLockGuard irq_lock_guard;
 
   task->timeout_cb = cb;
@@ -139,9 +142,9 @@ void utos_task_sleep(uint32_t timeout_ms) {
   {
     utos::internal::IrqLockGuard irq_lock_guard;
     auto task = utos_current_task;
-    utos_task_mark_unready(task);
+    utos_task_suspend(task);
     utos_task_register_timeout(
-        task, [](utos::Task *t, void *unused) { utos_task_mark_ready(t); },
+        task, [](utos::Task *t, void *unused) { utos_task_ready(t); },
         nullptr, utos::time::get_time_ms() + timeout_ms);
   }
 
