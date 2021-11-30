@@ -33,6 +33,7 @@ namespace internal {
 class IrqLockGuard {
  public:
   IrqLockGuard() {
+    primask_cache = __get_PRIMASK();
     __disable_irq();
     __DSB();
     __ISB();
@@ -40,7 +41,9 @@ class IrqLockGuard {
   }
   ~IrqLockGuard() {
     if (--critical_nesting() == 0) {
-      __enable_irq();
+      /// The __enable_irq() function cannot be used here. In some cases, it is
+      /// not only os that uses interrupt control
+      __set_PRIMASK(primask_cache);
     }
   }
 
@@ -49,6 +52,7 @@ class IrqLockGuard {
     static std::atomic<uint32_t> critical_nesting_{0};
     return critical_nesting_;
   }
+  uint32_t primask_cache;
 };
 
 class Noncopyable {
