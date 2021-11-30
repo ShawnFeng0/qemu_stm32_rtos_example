@@ -6,6 +6,7 @@
 #include "utos/event.h"
 #include "utos/mutex.h"
 #include "utos/task.h"
+#include "utos/condition_variable.h"
 
 void SystemClock_Config(void);
 static void Error_Handler(void);

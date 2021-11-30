@@ -7,9 +7,9 @@
 #include <cstdio>
 #include <cstring>
 
+#include "int_bitmap.h"
 #include "intrusive_list/list.h"
 #include "utos/event.h"
-#include "utos/int_bitmap.h"
 #include "utos/tick.h"
 
 // Need to be implemented externally
